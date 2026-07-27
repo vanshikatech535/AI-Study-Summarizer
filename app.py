@@ -1,5 +1,5 @@
 import streamlit as st
-import google.generativeai as genai
+from groq import Groq
 from dotenv import load_dotenv
 import os
 import PyPDF2
@@ -7,9 +7,11 @@ import PyPDF2
 # Load API key
 load_dotenv()
 
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+client = Groq(
+    api_key=os.getenv("GROQ_API_KEY")
+)
 
-model = genai.GenerativeModel("gemini-1.5-flash")
+st.set_page_config(page_title="AI Study Notes Summarizer")
 
 st.title("📚 AI Study Notes Summarizer")
 
@@ -20,47 +22,63 @@ option = st.radio(
 
 text = ""
 
-# Paste notes
 if option == "Paste Notes":
-    text = st.text_area("Paste your study notes", height=250)
+    text = st.text_area(
+        "Paste your study notes",
+        height=250
+    )
 
-# Upload PDF
 else:
     uploaded_file = st.file_uploader(
         "Upload PDF",
         type=["pdf"]
     )
 
-    if uploaded_file:
+    if uploaded_file is not None:
         pdf = PyPDF2.PdfReader(uploaded_file)
 
         for page in pdf.pages:
-            text += page.extract_text()
+            page_text = page.extract_text()
+            if page_text:
+                text += page_text + "\n"
 
 if st.button("Generate"):
 
-    if text == "":
-        st.warning("Please enter notes.")
+    if text.strip() == "":
+        st.warning("Please enter or upload notes.")
+
     else:
 
         prompt = f"""
-        You are an AI Study Assistant.
+You are an AI Study Assistant.
 
-        Read the following notes.
+Read the following notes carefully.
 
-        Generate:
+Generate:
 
-        1. Summary
-        2. Important Points
-        3. 5 Quiz Questions
+1. Summary
+2. Important Points
+3. 5 Quiz Questions with Answers
 
-        Notes:
+Notes:
 
-        {text}
-        """
+{text}
+"""
 
-        response = model.generate_content(prompt)
+        try:
+            response = client.chat.completions.create(
+                model="llama-3.1-8b-instant",
+                messages=[
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ]
+            )
 
-        st.success("Done!")
+            st.success("Notes Generated Successfully!")
 
-        st.write(response.text)
+            st.write(response.choices[0].message.content)
+
+        except Exception as e:
+            st.error(f"Error: {e}")
